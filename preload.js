@@ -1,11 +1,12 @@
-// Immediately define a custom mediaDevices object before Discord touches it
-const originalMediaDevices = navigator.mediaDevices;
+// Store the original prototype function
+const originalGetUserMedia = MediaDevices.prototype.getUserMedia;
 
-const customMediaDevices = {
-  getUserMedia: async function(constraints) {
-    console.log("[Realcord] Intercepting via custom boot-hook...");
-    
-    // Setup for 2 channels
+// Apply our override to the prototype
+Object.defineProperty(MediaDevices.prototype, 'getUserMedia', {
+  value: async function(constraints) {
+    console.log("[Realcord] Prototype intercept triggered!");
+
+    // Apply stereo constraints
     if (constraints?.audio) {
       if (typeof constraints.audio !== 'object') constraints.audio = {};
       constraints.audio.channelCount = { ideal: 2, exact: 2 };
@@ -14,9 +15,10 @@ const customMediaDevices = {
       constraints.audio.autoGainControl = false;
     }
 
-    const stream = await originalMediaDevices.getUserMedia(constraints);
-    
-    // Set up stereo routing
+    // Call the original function
+    const stream = await originalGetUserMedia.call(this, constraints);
+
+    // Build the stereo audio graph
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
       const source = audioCtx.createMediaStreamSource(stream);
@@ -24,6 +26,7 @@ const customMediaDevices = {
       const merger = audioCtx.createChannelMerger(2);
       const panner = audioCtx.createStereoPanner();
 
+      panner.pan.value = 0.0;
       source.connect(splitter);
       splitter.connect(merger, 0, 0);
       splitter.connect(merger, 0, 1);
@@ -31,20 +34,11 @@ const customMediaDevices = {
       panner.connect(audioCtx.destination);
 
       window.realcordPanner = panner;
-      console.log("[Realcord] Stereo stream established.");
-    } catch (e) { console.error(e); }
+      console.log("[Realcord] Stereo graph established via prototype patch.");
+    } catch (e) { console.error("[Realcord] Stereo Error:", e); }
 
     return stream;
   },
-  enumerateDevices: () => originalMediaDevices.enumerateDevices(),
-  getDisplayMedia: (c) => originalMediaDevices.getDisplayMedia(c),
-  addEventListener: (t, l) => originalMediaDevices.addEventListener(t, l),
-  removeEventListener: (t, l) => originalMediaDevices.removeEventListener(t, l)
-};
-
-// Force the override
-Object.defineProperty(navigator, 'mediaDevices', {
-  value: customMediaDevices,
-  writable: false,
-  configurable: false
+  configurable: false,
+  writable: false
 });
