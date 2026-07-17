@@ -1,30 +1,20 @@
 const path = require('path');
 const Module = require('module');
-const fs = require('fs'); // Added to write the updated preload file to your disk
+const fs = require('fs');
 const { app, BrowserWindow } = require('electron');
 
 // =========================================================================
-// 1. VOICE MODULE INTERCEPTION (Runs before Electron UI initialization)
+// 1. VOICE MODULE INTERCEPTION (Forces fallback to Browser WebRTC API)
 // =========================================================================
 const originalRequire = Module.prototype.require;
 
 Module.prototype.require = function(request) {
-  // If Discord tries to load its default mono voice engine, intercept it
+  // If Discord tries to load its native desktop voice engine, block it.
+  // This forces Discord to fall back to standard browser-level WebRTC/getUserMedia,
+  // which makes our preload.js stereo audio graph actually work.
   if (request.includes('discord_voice') || request === 'discord_voice.node') {
-    console.log('[Realcord] Intercepted voice engine. Injecting stereo binary...');
-    
-    // Resolve the target binary path
-    let targetPath = path.join(__dirname, 'voice_module', 'discord_voice.node');
-    
-    // FIX: If running inside the packaged app.asar, point to the unpacked folder instead
-    if (targetPath.includes('app.asar')) {
-      targetPath = targetPath.replace('app.asar', 'app.asar.unpacked');
-    }
-    
-    console.log('[Realcord] Loading binary from: ' + targetPath);
-    
-    // Redirect to your local, patched C++ module
-    return originalRequire.call(this, targetPath);
+    console.log('[Realcord] Intercepted voice engine request. Blocking native module to force WebRTC fallback...');
+    throw new Error('Native voice engine disabled to force WebRTC fallback.');
   }
   return originalRequire.apply(this, arguments);
 };
@@ -52,7 +42,6 @@ function createWindow() {
   fetch(REMOTE_PRELOAD_URL)
     .then(res => res.text())
     .then(onlineCode => {
-      // Basic verification to ensure we actually got the JS file and not an error page
       if (onlineCode && onlineCode.includes('Stereo')) {
         fs.writeFileSync(localPreloadPath, onlineCode, 'utf-8');
         console.log('[Updater] Preload script updated successfully!');
