@@ -1,12 +1,12 @@
 // =========================================================================
-// 1. FORCE STEREO & WEBAUDIO PATCH
+// PURE STEREO ROUTING ONLY
 // =========================================================================
 const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
 navigator.mediaDevices.getUserMedia = async function (constraints) {
-  console.log("[Realcord] Intercepting getUserMedia constraints:", constraints);
+  console.log("[Realcord] Intercepting mic for stereo routing...");
 
-  // Force stereo and high-quality audio flags in the media constraints
+  // Force Chrome/Electron to request 2 input channels
   if (constraints && constraints.audio) {
     if (typeof constraints.audio === "boolean") {
       constraints.audio = {};
@@ -20,40 +20,40 @@ navigator.mediaDevices.getUserMedia = async function (constraints) {
   const stream = await originalGetUserMedia(constraints);
   
   try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-      latencyHint: "interactive",
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({
       sampleRate: 48000
     });
 
-    // Manually force the pipeline destination to support 2 channels (Stereo)
-    if (audioContext.destination) {
-      audioContext.destination.channelCount = 2;
-      audioContext.destination.channelCountMode = "explicit";
-      audioContext.destination.channelInterpretation = "speakers";
-    }
+    // Force the output destination to strictly process 2 discrete channels
+    audioCtx.destination.channelCount = 2;
+    audioCtx.destination.channelCountMode = "explicit";
+    audioCtx.destination.channelInterpretation = "speakers";
 
-    const source = audioContext.createMediaStreamSource(stream);
+    const source = audioCtx.createMediaStreamSource(stream);
     
-    // Create a manual Stereo Panner Node and Gain Node
-    const panner = audioContext.createStereoPanner();
-    const gainNode = audioContext.createGain();
+    // Create a channel splitter and merger to duplicate the mono mic into Left & Right
+    const splitter = audioCtx.createChannelSplitter(2);
+    const merger = audioCtx.createChannelMerger(2);
 
+    // Connect Mono Channel 0 to both Left and Right output slots
+    source.connect(splitter);
+    splitter.connect(merger, 0, 0); // Mic input -> Left channel
+    splitter.connect(merger, 0, 1); // Mic input -> Right channel
+
+    // Add the Stereo Panner Node to control the balance
+    const panner = audioCtx.createStereoPanner();
     panner.pan.value = 0.0; // Center by default
-    gainNode.gain.value = 1.0; // Standard gain
 
-    // Expose these nodes globally to the window so our controllers can reach them
+    // Connect: Duplicated Stereo -> Panner -> Destination
+    merger.connect(panner);
+    panner.connect(audioCtx.destination);
+
+    // Expose the panner to the console so we can control it manually
     window.realcordPanner = panner;
-    window.realcordGain = gainNode;
-    window.realcordAudioContext = audioContext;
 
-    // Connect the nodes: Source -> Panner -> Gain -> Destination
-    source.connect(panner);
-    panner.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    console.log("[Realcord] Stereo Web Audio routing established successfully.");
+    console.log("[Realcord] Stereo channel routing successfully configured.");
   } catch (err) {
-    console.error("[Realcord] Failed to construct custom audio graph:", err);
+    console.error("[Realcord] Error setting up stereo routing:", err);
   }
 
   return stream;
