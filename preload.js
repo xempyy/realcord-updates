@@ -1,12 +1,8 @@
-// =========================================================================
-// DIRECT STEREO ROUTING (No Context Isolation)
-// =========================================================================
 const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
 navigator.mediaDevices.getUserMedia = async function (constraints) {
   console.log("[Realcord] Intercepting mic for stereo routing...");
 
-  // Force Chrome/Electron to request 2 input channels
   if (constraints && constraints.audio) {
     if (typeof constraints.audio === "boolean") {
       constraints.audio = {};
@@ -24,31 +20,25 @@ navigator.mediaDevices.getUserMedia = async function (constraints) {
       sampleRate: 48000
     });
 
-    // Force the output destination to strictly process 2 discrete channels
     audioCtx.destination.channelCount = 2;
     audioCtx.destination.channelCountMode = "explicit";
     audioCtx.destination.channelInterpretation = "speakers";
 
     const source = audioCtx.createMediaStreamSource(stream);
     
-    // Create a channel splitter and merger to duplicate the mono mic into Left & Right
     const splitter = audioCtx.createChannelSplitter(2);
     const merger = audioCtx.createChannelMerger(2);
 
-    // Connect Mono Channel 0 to both Left and Right output slots
     source.connect(splitter);
-    splitter.connect(merger, 0, 0); // Mic input -> Left channel
-    splitter.connect(merger, 0, 1); // Mic input -> Right channel
+    splitter.connect(merger, 0, 0); 
+    splitter.connect(merger, 0, 1); 
 
-    // Add the Stereo Panner Node to control the balance
     const panner = audioCtx.createStereoPanner();
-    panner.pan.value = 0.0; // Center by default
+    panner.pan.value = 0.0; 
 
-    // Connect: Duplicated Stereo -> Panner -> Destination
     merger.connect(panner);
     panner.connect(audioCtx.destination);
 
-    // Write the panner directly to the global window
     window.realcordPanner = panner;
 
     console.log("[Realcord] Stereo routing active. window.realcordPanner is ready!");
