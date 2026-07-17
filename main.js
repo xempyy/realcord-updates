@@ -31,7 +31,7 @@ function createWindow() {
     webPreferences: {
       preload: localPreloadPath,
       nodeIntegration: false,
-      contextIsolation: true,
+      contextIsolation: false, // Disabled so we can access variables directly from the console
     },
     title: "Stereo Discord Client",
   });

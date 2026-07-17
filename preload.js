@@ -1,10 +1,6 @@
-const { contextBridge } = require('electron');
-
 // =========================================================================
-// PURE STEREO ROUTING & CONTEXT BRIDGE
+// DIRECT STEREO ROUTING (No Context Isolation)
 // =========================================================================
-let activePannerNode = null;
-
 const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
 navigator.mediaDevices.getUserMedia = async function (constraints) {
@@ -52,27 +48,13 @@ navigator.mediaDevices.getUserMedia = async function (constraints) {
     merger.connect(panner);
     panner.connect(audioCtx.destination);
 
-    // Keep reference in preload scope
-    activePannerNode = panner;
+    // Write the panner directly to the global window
+    window.realcordPanner = panner;
 
-    console.log("[Realcord] Stereo channel routing successfully configured.");
+    console.log("[Realcord] Stereo routing active. window.realcordPanner is ready!");
   } catch (err) {
     console.error("[Realcord] Error setting up stereo routing:", err);
   }
 
   return stream;
 };
-
-// =========================================================================
-// BRIDGE TO CONSOLE (Bypasses Context Isolation)
-// =========================================================================
-contextBridge.exposeInMainWorld('realcord', {
-  setPan: (value) => {
-    if (activePannerNode) {
-      activePannerNode.pan.value = value;
-      console.log(`[Realcord] Pan successfully set to: ${value}`);
-    } else {
-      console.warn("[Realcord] Cannot pan: Microphone stream is not active yet.");
-    }
-  }
-});
