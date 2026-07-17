@@ -440,3 +440,30 @@ function attachUIEvents() {
 
     console.log('[Stereo Injection] WebRTC SDP interceptor successfully initialized.');
 })();
+
+// =========================================================================
+// REALCORD STEREO AUDIO INJECTION
+// Intercepts and overrides Discord's microphone capture to force stereo
+// =========================================================================
+
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+
+  navigator.mediaDevices.getUserMedia = async function (constraints) {
+    if (constraints && constraints.audio) {
+      console.log('[Realcord] Intercepted getUserMedia. Forcing stereo audio constraints...');
+
+      // Force stereo parameters and disable aggressive mono-forcing filters
+      constraints.audio = {
+        channelCount: { ideal: 2, min: 2 }, // Force 2 channels (Stereo)
+        echoCancellation: false,             // Disable echo cancellation (forces mono)
+        noiseSuppression: false,             // Disable noise suppression (forces mono)
+        autoGainControl: false,              // Disable auto gain
+        highpassFilter: false,               // Disable highpass filter
+        typingNoiseDetection: false          // Disable typing noise removal
+      };
+    }
+    return originalGetUserMedia(constraints);
+  };
+  console.log('[Realcord] Stereo audio hook successfully injected.');
+}

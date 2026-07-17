@@ -1,0 +1,34 @@
+{
+  "name": "realcord",
+  "version": "1.0.0",
+  "description": "Discord client with stereo audio bypass modifications",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.realcord.stereo",
+    "productName": "Realcord",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "voice_module/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "voice_module/discord_voice.node"
+    ],
+    "win": {
+      "target": "portable"
+    }
+  }
+}
